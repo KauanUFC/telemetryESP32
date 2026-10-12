@@ -1,0 +1,21 @@
+{
+  "name": "raw_sketch",
+  "version": "2.0.0",
+  "description": "ESP32 telemetry dashboard with MQTT + SSE",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "broker": "mosquitto -c mosquitto.conf -d",
+    "stop-broker": "pkill -f 'mosquitto.*18830' || true",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.2.1",
+    "mqtt": "^5.10.4",
+    "multer": "^2.4.0"
+  }
+}

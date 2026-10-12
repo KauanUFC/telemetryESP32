@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 Telemetry Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+    .container { max-width: 900px; margin: 0 auto; padding: 30px 20px; }
+    h1 { text-align: center; color: #38bdf8; margin-bottom: 8px; font-size: 28px; }
+    .subtitle { text-align: center; color: #94a3b8; margin-bottom: 30px; font-size: 14px; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 30px; }
+    .card { background: #1e293b; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #334155; }
+    .card .label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin-bottom: 8px; }
+    .card .value { font-size: 28px; font-weight: 700; color: #e2e8f0; }
+    .card .value.green { color: #22c55e; }
+    .card .value.red { color: #ef4444; }
+    .card .value.yellow { color: #eab308; }
+    .card .value.blue { color: #38bdf8; }
+    .controls { background: #1e293b; border-radius: 12px; padding: 24px; border: 1px solid #334155; margin-bottom: 30px; }
+    .controls h3 { color: #38bdf8; margin-bottom: 16px; font-size: 16px; }
+    .btn-row { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .btn { flex: 1; min-width: 120px; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+    .btn:hover { opacity: 0.85; }
+    .btn-on { background: #22c55e; color: #fff; }
+    .btn-off { background: #ef4444; color: #fff; }
+    .mode-selector { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+    .mode-selector label { cursor: pointer; display: flex; align-items: center; gap: 6px; color: #94a3b8; font-size: 14px; }
+    .mode-selector input[type="radio"] { accent-color: #38bdf8; }
+    .mode-selector .active { color: #38bdf8; font-weight: 600; }
+    .status-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding: 10px 14px; background: #1e293b; border-radius: 8px; border: 1px solid #334155; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .status-dot.green { background: #22c55e; }
+    .status-dot.red { background: #ef4444; }
+    .status-label { color: #94a3b8; font-size: 12px; }
+    #statusMsg { margin-top: 12px; font-size: 13px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>ESP32 Telemetry</h1>
+    <p class="subtitle">Real-time monitoring & control</p>
+
+    <div class="status-bar">
+      <span class="status-dot red" id="brokerDot"></span>
+      <span class="status-label">Broker</span>
+      <span id="brokerStatus" style="color:#94a3b8;font-size:13px">checking...</span>
+      <span style="color:#334155;margin:0 8px">|</span>
+      <span class="status-dot red" id="deviceDot"></span>
+      <span class="status-label">ESP32</span>
+      <span id="deviceStatus" style="color:#94a3b8;font-size:13px">---</span>
+      <span style="color:#334155;margin:0 8px">|</span>
+      <span class="status-label">MAC</span>
+      <span id="deviceMac" style="color:#94a3b8;font-size:13px">---</span>
+    </div>
+
+    <div class="cards" id="cards">
+      <div class="card"><div class="label">Device</div><div class="value blue" id="deviceId">---</div></div>
+      <div class="card"><div class="label">LED State</div><div class="value" id="ledState">---</div></div>
+      <div class="card"><div class="label">RSSI</div><div class="value" id="rssi">---</div></div>
+      <div class="card"><div class="label">Free Heap</div><div class="value" id="freeHeap">---</div></div>
+      <div class="card"><div class="label">Uptime</div><div class="value" id="uptime">---</div></div>
+      <div class="card"><div class="label">Temp (CPU)</div><div class="value" id="tempCpu">---</div></div>
+      <div class="card"><div class="label">MQTT</div><div class="value" id="mqttStatus">---</div></div>
+      <div class="card"><div class="label">WiFi</div><div class="value" id="wifiStatus">---</div></div>
+    </div>
+
+    <div class="controls">
+      <h3>LED Control</h3>
+      <div class="btn-row">
+        <button class="btn btn-on" onclick="controlLed('on')">Turn ON</button>
+        <button class="btn btn-off" onclick="controlLed('off')">Turn OFF</button>
+      </div>
+      <div class="mode-selector">
+        <span style="color:#94a3b8;font-size:13px">Command mode:</span>
+        <label><input type="radio" name="cmdMode" value="http" checked onchange="setMode('http')"> HTTP direct</label>
+        <label><input type="radio" name="cmdMode" value="mqtt" onchange="setMode('mqtt')"> MQTT</label>
+        <span id="activeMode" style="font-size:12px;color:#64748b"></span>
+      </div>
+      <div id="statusMsg"></div>
+      <div style="margin-top:16px;border-top:1px solid #334155;padding-top:16px">
+        <button class="btn" style="width:100%;background:#8b5cf6;color:#fff" onclick="location.href='/ota.html'">
+          &#9889; OTA Firmware Update
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- SSE telemetry ---
+    const evtSource = new EventSource("/events");
+    let lastTelemetryTs = 0;
+    const TELEMETRY_TIMEOUT = 15000;
+
+    evtSource.onmessage = (event) => {
+      try {
+        const d = JSON.parse(event.data);
+        lastTelemetryTs = Date.now();
+        updateDashboard(d);
+      } catch (e) {
+        console.error("SSE parse error:", e);
+      }
+    };
+
+    evtSource.onerror = () => {
+      console.warn("SSE connection error, retrying...");
+    };
+
+function updateDashboard(d) {
+      document.getElementById("deviceId").textContent = d.device_id || "---";
+      document.getElementById("ledState").textContent = d.led_state || "---";
+      document.getElementById("ledState").className = "value " + (d.led_state === "on" ? "green" : "red");
+      document.getElementById("rssi").textContent = d.rssi !== undefined ? d.rssi + " dBm" : "---";
+      document.getElementById("rssi").className = "value " + (
+        d.rssi > -60 ? "green" : d.rssi > -80 ? "yellow" : "red"
+      );
+      document.getElementById("freeHeap").textContent = d.free_heap !== undefined ? fmtBytes(d.free_heap) : "---";
+      document.getElementById("uptime").textContent = d.uptime_s !== undefined ? fmtUptime(d.uptime_s) : "---";
+      document.getElementById("tempCpu").textContent = d.temp_cpu !== undefined ? d.temp_cpu.toFixed(1) + " °C" : "---";
+      document.getElementById("mqttStatus").textContent = d.mqtt_connected ? "Connected" : "Disconnected";
+      document.getElementById("mqttStatus").className = "value " + (d.mqtt_connected ? "green" : "red");
+      document.getElementById("wifiStatus").textContent = d.wifi_connected ? "Connected" : "Disconnected";
+      document.getElementById("wifiStatus").className = "value " + (d.wifi_connected ? "green" : "red");
+    }
+
+    function clearDashboard() {
+      const ids = ["deviceId", "ledState", "rssi", "freeHeap", "uptime", "tempCpu", "mqttStatus", "wifiStatus"];
+      ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.textContent = "---";
+          el.className = "value";
+        }
+      });
+    }
+
+    function fmtBytes(bytes) {
+      if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+      if (bytes >= 1024) return (bytes / 1024).toFixed(1) + " KB";
+      return bytes + " B";
+    }
+
+    function fmtUptime(s) {
+      const days = Math.floor(s / 86400);
+      const hours = Math.floor((s % 86400) / 3600);
+      const mins = Math.floor((s % 3600) / 60);
+      const secs = s % 60;
+      if (days > 0) return `${days}d ${hours}h ${mins}m`;
+      if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
+      if (mins > 0) return `${mins}m ${secs}s`;
+      return `${secs}s`;
+    }
+
+    // --- LED control ---
+    async function controlLed(action) {
+      const msg = document.getElementById("statusMsg");
+      msg.textContent = "Sending command...";
+
+      try {
+        const res = await fetch(`/api/led/${action}`);
+        const data = await res.json();
+        msg.textContent = data.error ? `Error: ${data.error}` : `LED turned ${action}`;
+      } catch (e) {
+        msg.textContent = "Error: " + e.message;
+      }
+    }
+
+    // --- Mode selector ---
+    async function setMode(mode) {
+      const el = document.getElementById("activeMode");
+      el.textContent = "Switching...";
+
+      try {
+        const res = await fetch("/api/config/mode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode })
+        });
+        const data = await res.json();
+        el.textContent = data.commandMode === "mqtt" ? "via MQTT" : "via HTTP";
+      } catch (e) {
+        el.textContent = "Error";
+      }
+    }
+
+    // Load initial mode
+    fetch("/api/config")
+      .then(r => r.json())
+      .then(d => {
+        document.getElementById("activeMode").textContent = d.commandMode === "mqtt" ? "via MQTT" : "via HTTP";
+        document.querySelector(`input[name="cmdMode"][value="${d.commandMode}"]`).checked = true;
+      })
+      .catch(() => {});
+
+  // --- MQTT broker status polling ---
+  async function checkBrokerStatus() {
+    try {
+      const res = await fetch("/api/config");
+      const cfg = await res.json();
+
+      const brokerDot = document.getElementById("brokerDot");
+      const brokerStatus = document.getElementById("brokerStatus");
+      brokerDot.className = "status-dot " + (cfg.mqtt_connected ? "green" : "red");
+      brokerStatus.textContent = cfg.mqtt_connected ? "Connected" : "Disconnected";
+
+      if (lastTelemetryTs > 0 && Date.now() - lastTelemetryTs > TELEMETRY_TIMEOUT) {
+        clearDashboard();
+        document.getElementById("deviceDot").className = "status-dot red";
+      } else if (cfg.device && cfg.device.ip) {
+        document.getElementById("deviceDot").className = "status-dot green";
+        document.getElementById("deviceStatus").textContent = cfg.device.ip;
+      }
+      if (cfg.device && cfg.device.mac) {
+        document.getElementById("deviceMac").textContent = cfg.device.mac;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  checkBrokerStatus();
+  setInterval(checkBrokerStatus, 5000);
+</script>
+</body>
+</html>
