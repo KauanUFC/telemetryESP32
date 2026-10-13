@@ -17,11 +17,12 @@ MQTTManager::MQTTManager(WiFiClient& wifi_client)
   client_.setCallback(internal_callback);
 }
 
-void MQTTManager::begin(const char* broker, uint16_t port, const char* user, const char* pass) {
+void MQTTManager::begin(const char* broker, uint16_t port, const char* user, const char* pass, const String& client_id) {
   broker_ = broker;
   port_ = port;
   user_ = user;
   pass_ = pass;
+  client_id_ = client_id.length() > 0 ? client_id : ("esp32-" + String(random(0xffff), HEX));
   client_.setServer(broker_, port_);
   connect_or_reconnect();
 }
@@ -68,14 +69,14 @@ void MQTTManager::connect_or_reconnect() {
   }
   last_reconnect_attempt_ = millis();
 
-  String client_id = "esp32-" + String(random(0xffff), HEX);
-  Serial.printf("MQTT connecting to %s:%d as %s ... ", broker_, port_, client_id.c_str());
+  String cid = client_id_.length() > 0 ? client_id_ : ("esp32-" + String(random(0xffff), HEX));
+  Serial.printf("MQTT connecting to %s:%d as %s ... ", broker_, port_, cid.c_str());
 
   bool ok;
   if (strlen(user_) > 0) {
-    ok = client_.connect(client_id.c_str(), user_, pass_);
+    ok = client_.connect(cid.c_str(), user_, pass_);
   } else {
-    ok = client_.connect(client_id.c_str());
+    ok = client_.connect(cid.c_str());
   }
 
   if (ok) {

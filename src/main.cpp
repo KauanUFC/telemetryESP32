@@ -109,7 +109,9 @@ void setup() {
 
   device_topic_base = "esp32/" + wifi.mac();
 
-  mqtt.begin(MQTT_BROKER, MQTT_PORT, MQTT_USER, MQTT_PASS);
+  String client_id = "esp32-";
+  client_id += wifi.mac();
+  mqtt.begin(MQTT_BROKER, MQTT_PORT, MQTT_USER, MQTT_PASS, client_id);
   mqtt.set_callback(on_mqtt_message);
   mqtt.set_connect_callback(on_mqtt_connect);
   mqtt.subscribe(device_topic_base + "/#");

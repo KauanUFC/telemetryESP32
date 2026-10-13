@@ -5,9 +5,9 @@ const multer = require("multer");
 const app = express();
 const PORT = 3000;
 const ESP32_OTA_PORT = 8266;
-const ESP32_OTA_USER = "admin";
-const ESP32_OTA_PASS = "123";
-const MQTT_BROKER = "mqtt://192.168.100.194:18830";
+const ESP32_OTA_USER = process.env.ESP32_OTA_USER || "admin";
+const ESP32_OTA_PASS = process.env.ESP32_OTA_PASS || "123";
+const MQTT_BROKER = process.env.MQTT_BROKER || "mqtt://localhost:1883";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024 } });
 
@@ -17,6 +17,7 @@ let latestTelemetry = {};
 let deviceInfo = { ip: null, mac: null, deviceId: null };
 let sseClients = [];
 let mqttConnected = false;
+let espHttpOnline = false;
 
 // --- MQTT ---
 const mqttClient = mqtt.connect(MQTT_BROKER);
@@ -121,9 +122,24 @@ app.get("/api/led/status", async (req, res) => {
   }
 });
 
+// --- HTTP health check ---
+setInterval(async () => {
+  if (!deviceInfo.ip) {
+    espHttpOnline = false;
+    return;
+  }
+  try {
+    const res = await fetch(`http://${deviceInfo.ip}/led/status`, { signal: AbortSignal.timeout(3000) });
+    espHttpOnline = res.ok;
+  } catch {
+    espHttpOnline = false;
+    console.log("Health check: ESP32 HTTP unreachable");
+  }
+}, 10000);
+
 // --- Config endpoints ---
 app.get("/api/config", (req, res) => {
-  res.json({ commandMode, device: deviceInfo, mqtt_connected: mqttConnected });
+  res.json({ commandMode, device: deviceInfo, mqtt_connected: mqttConnected, esp_http_online: espHttpOnline });
 });
 
 app.post("/api/config/mode", express.json(), (req, res) => {

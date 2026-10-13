@@ -1,0 +1,8 @@
+node_modules/
+.git
+.gitignore
+mosquitto-local.conf
+package-lock.json
+Dockerfile
+docker-compose.yml
+.dockerignore

@@ -13,7 +13,7 @@ class MQTTManager {
 public:
   MQTTManager(WiFiClient& wifi_client);
 
-  void begin(const char* broker, uint16_t port, const char* user, const char* pass);
+  void begin(const char* broker, uint16_t port, const char* user, const char* pass, const String& client_id = "");
   void loop();
   bool publish(const String& topic, const String& payload, bool retained = false);
   bool subscribe(const String& topic);
@@ -29,6 +29,7 @@ private:
   const char* pass_;
   MqttCallback user_callback_;
   MqttConnectCallback connect_callback_;
+  String client_id_;
   uint32_t last_reconnect_attempt_;
   String subscribed_topics_[10];
   int topic_count_;

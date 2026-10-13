@@ -13,7 +13,7 @@ static constexpr uint32_t WIFI_RETRY_INTERVAL_MS = 30000;
 
 // MQTT (local Mosquitto)
 static constexpr const char* MQTT_BROKER = "192.168.100.194";
-static constexpr uint16_t MQTT_PORT = 18830;
+static constexpr uint16_t MQTT_PORT = 1883;
 static constexpr uint32_t MQTT_RECONNECT_INTERVAL_MS = 5000;
 
 // Telemetry

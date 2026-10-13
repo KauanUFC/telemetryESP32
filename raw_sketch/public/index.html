@@ -31,8 +31,9 @@
     .mode-selector .active { color: #38bdf8; font-weight: 600; }
     .status-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding: 10px 14px; background: #1e293b; border-radius: 8px; border: 1px solid #334155; }
     .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-    .status-dot.green { background: #22c55e; }
-    .status-dot.red { background: #ef4444; }
+.status-dot.green { background: #22c55e; }
+.status-dot.red { background: #ef4444; }
+.status-dot.yellow { background: #eab308; }
     .status-label { color: #94a3b8; font-size: 12px; }
     #statusMsg { margin-top: 12px; font-size: 13px; color: #94a3b8; }
   </style>
@@ -53,6 +54,14 @@
       <span style="color:#334155;margin:0 8px">|</span>
       <span class="status-label">MAC</span>
       <span id="deviceMac" style="color:#94a3b8;font-size:13px">---</span>
+      <span style="color:#334155;margin:0 8px">|</span>
+      <span class="status-dot red" id="wifiDot"></span>
+      <span class="status-label">WiFi</span>
+      <span id="wifiBarStatus" style="color:#94a3b8;font-size:13px">---</span>
+      <span style="color:#334155;margin:0 8px">|</span>
+      <span class="status-dot red" id="mqttDot"></span>
+      <span class="status-label">MQTT</span>
+      <span id="mqttBarStatus" style="color:#94a3b8;font-size:13px">---</span>
     </div>
 
     <div class="cards" id="cards">
@@ -92,6 +101,8 @@
     const evtSource = new EventSource("/events");
     let lastTelemetryTs = 0;
     const TELEMETRY_TIMEOUT = 15000;
+    let lastWifiStatus = null;
+    let lastMqttStatus = null;
 
     evtSource.onmessage = (event) => {
       try {
@@ -122,6 +133,8 @@ function updateDashboard(d) {
       document.getElementById("mqttStatus").className = "value " + (d.mqtt_connected ? "green" : "red");
       document.getElementById("wifiStatus").textContent = d.wifi_connected ? "Connected" : "Disconnected";
       document.getElementById("wifiStatus").className = "value " + (d.wifi_connected ? "green" : "red");
+      lastWifiStatus = d.wifi_connected;
+      lastMqttStatus = d.mqtt_connected;
     }
 
     function clearDashboard() {
@@ -133,6 +146,8 @@ function updateDashboard(d) {
           el.className = "value";
         }
       });
+      lastWifiStatus = null;
+      lastMqttStatus = null;
     }
 
     function fmtBytes(bytes) {
@@ -204,15 +219,40 @@ function updateDashboard(d) {
       brokerDot.className = "status-dot " + (cfg.mqtt_connected ? "green" : "red");
       brokerStatus.textContent = cfg.mqtt_connected ? "Connected" : "Disconnected";
 
-      if (lastTelemetryTs > 0 && Date.now() - lastTelemetryTs > TELEMETRY_TIMEOUT) {
-        clearDashboard();
-        document.getElementById("deviceDot").className = "status-dot red";
-      } else if (cfg.device && cfg.device.ip) {
+      const isStale = lastTelemetryTs > 0 && Date.now() - lastTelemetryTs > TELEMETRY_TIMEOUT;
+
+      if (isStale) {
+        if (cfg.esp_http_online) {
+          document.getElementById("deviceDot").className = "status-dot yellow";
+          document.getElementById("deviceStatus").textContent = cfg.device?.ip || "---";
+          document.getElementById("wifiDot").className = "status-dot green";
+          document.getElementById("wifiBarStatus").textContent = "HTTP: OK";
+          document.getElementById("mqttDot").className = "status-dot red";
+          document.getElementById("mqttBarStatus").textContent = "Disconnected";
+        } else {
+          document.getElementById("deviceDot").className = "status-dot red";
+          document.getElementById("deviceStatus").textContent = "---";
+          document.getElementById("deviceMac").textContent = "---";
+          document.getElementById("wifiDot").className = "status-dot red";
+          document.getElementById("wifiBarStatus").textContent = "Offline";
+          document.getElementById("mqttDot").className = "status-dot red";
+          document.getElementById("mqttBarStatus").textContent = "---";
+          clearDashboard();
+        }
+      } else {
         document.getElementById("deviceDot").className = "status-dot green";
-        document.getElementById("deviceStatus").textContent = cfg.device.ip;
-      }
-      if (cfg.device && cfg.device.mac) {
-        document.getElementById("deviceMac").textContent = cfg.device.mac;
+        document.getElementById("deviceStatus").textContent = cfg.device?.ip || "---";
+        if (cfg.device && cfg.device.mac) {
+          document.getElementById("deviceMac").textContent = cfg.device.mac;
+        }
+        if (lastWifiStatus !== null) {
+          document.getElementById("wifiDot").className = "status-dot " + (lastWifiStatus ? "green" : "red");
+          document.getElementById("wifiBarStatus").textContent = lastWifiStatus ? "OK" : "Offline";
+        }
+        if (lastMqttStatus !== null) {
+          document.getElementById("mqttDot").className = "status-dot " + (lastMqttStatus ? "green" : "red");
+          document.getElementById("mqttBarStatus").textContent = lastMqttStatus ? "Connected" : "Disconnected";
+        }
       }
     } catch (e) {
       // ignore
