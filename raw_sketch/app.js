@@ -7,7 +7,9 @@ const PORT = 3000;
 const ESP32_OTA_PORT = 8266;
 const ESP32_OTA_USER = process.env.ESP32_OTA_USER || "admin";
 const ESP32_OTA_PASS = process.env.ESP32_OTA_PASS || "123";
-const MQTT_BROKER = process.env.MQTT_BROKER || "mqtt://localhost:1883";
+const MQTT_BROKER = process.env.MQTT_BROKER || "mqtt://<ip>:1883";
+// fallback WSS para HiveMQ (usar via env var se necessario)
+// MQTT_BROKER=wss://broker.hivemq.com:8884/mqtt node app.js
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024 } });
 
@@ -45,7 +47,7 @@ mqttClient.on("reconnect", () => {
 mqttClient.on("message", (topic, message) => {
   try {
     const payload = JSON.parse(message.toString());
-    const deviceId = payload.device_id || topic.split("/")[1];
+    const deviceId = topic.split("/")[1] || payload.device_id;
     latestTelemetry[deviceId] = payload;
     latestTelemetry[deviceId]._timestamp = Date.now();
 
@@ -70,15 +72,15 @@ app.use(express.static("public"));
 
 // --- Helpers ---
 function espIp() {
-  return deviceInfo.ip || "192.168.100.156";
+  return deviceInfo.ip;
 }
 
 function espMac() {
-  return deviceInfo.mac || "unknown";
+  return deviceInfo.mac;
 }
 
 function espDeviceId() {
-  return deviceInfo.deviceId || ("esp32-" + espMac());
+  return deviceInfo.deviceId;
 }
 
 // --- REST: LED control ---
@@ -133,7 +135,6 @@ setInterval(async () => {
     espHttpOnline = res.ok;
   } catch {
     espHttpOnline = false;
-    console.log("Health check: ESP32 HTTP unreachable");
   }
 }, 10000);
 

@@ -98,8 +98,9 @@
 
   <script>
     // --- SSE telemetry ---
-    const evtSource = new EventSource("/events");
+    let evtSource = new EventSource("/events");
     let lastTelemetryTs = 0;
+    let lastSseData = Date.now();
     const TELEMETRY_TIMEOUT = 15000;
     let lastWifiStatus = null;
     let lastMqttStatus = null;
@@ -108,6 +109,7 @@
       try {
         const d = JSON.parse(event.data);
         lastTelemetryTs = Date.now();
+        lastSseData = Date.now();
         updateDashboard(d);
       } catch (e) {
         console.error("SSE parse error:", e);
@@ -222,23 +224,14 @@ function updateDashboard(d) {
       const isStale = lastTelemetryTs > 0 && Date.now() - lastTelemetryTs > TELEMETRY_TIMEOUT;
 
       if (isStale) {
-        if (cfg.esp_http_online) {
-          document.getElementById("deviceDot").className = "status-dot yellow";
-          document.getElementById("deviceStatus").textContent = cfg.device?.ip || "---";
-          document.getElementById("wifiDot").className = "status-dot green";
-          document.getElementById("wifiBarStatus").textContent = "HTTP: OK";
-          document.getElementById("mqttDot").className = "status-dot red";
-          document.getElementById("mqttBarStatus").textContent = "Disconnected";
-        } else {
-          document.getElementById("deviceDot").className = "status-dot red";
-          document.getElementById("deviceStatus").textContent = "---";
-          document.getElementById("deviceMac").textContent = "---";
-          document.getElementById("wifiDot").className = "status-dot red";
-          document.getElementById("wifiBarStatus").textContent = "Offline";
-          document.getElementById("mqttDot").className = "status-dot red";
-          document.getElementById("mqttBarStatus").textContent = "---";
-          clearDashboard();
-        }
+        document.getElementById("deviceDot").className = "status-dot red";
+        document.getElementById("deviceStatus").textContent = "---";
+        document.getElementById("deviceMac").textContent = "---";
+        document.getElementById("wifiDot").className = "status-dot red";
+        document.getElementById("wifiBarStatus").textContent = "Offline";
+        document.getElementById("mqttDot").className = "status-dot red";
+        document.getElementById("mqttBarStatus").textContent = "---";
+        clearDashboard();
       } else {
         document.getElementById("deviceDot").className = "status-dot green";
         document.getElementById("deviceStatus").textContent = cfg.device?.ip || "---";
@@ -261,6 +254,30 @@ function updateDashboard(d) {
 
   checkBrokerStatus();
   setInterval(checkBrokerStatus, 5000);
+
+  // --- SSE watchdog: reconnect if stalled for 60s ---
+  setInterval(() => {
+    const brokerEl = document.getElementById("brokerStatus");
+    const brokerConnected = brokerEl && brokerEl.textContent === "Connected";
+    if (brokerConnected && Date.now() - lastSseData > 60000) {
+      console.warn("SSE stalled, reconnecting...");
+      evtSource.close();
+      evtSource = new EventSource("/events");
+      evtSource.onmessage = (event) => {
+        try {
+          const d = JSON.parse(event.data);
+          lastTelemetryTs = Date.now();
+          lastSseData = Date.now();
+          updateDashboard(d);
+        } catch (e) {
+          console.error("SSE parse error:", e);
+        }
+      };
+      evtSource.onerror = () => {
+        console.warn("SSE connection error, retrying...");
+      };
+    }
+  }, 30000);
 </script>
 </body>
 </html>

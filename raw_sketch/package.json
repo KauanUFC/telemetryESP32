@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node app.js",
     "broker": "mosquitto -c mosquitto.conf -d",
-    "stop-broker": "pkill -f 'mosquitto.*18830' || true",
+    "stop-broker": "pkill -f 'mosquitto.*1883' || true",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

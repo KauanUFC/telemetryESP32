@@ -5,13 +5,13 @@ MQTTManager* instance = nullptr;
 
 MQTTManager::MQTTManager(WiFiClient& wifi_client)
   : client_(wifi_client)
+  , wifi_client_(wifi_client)
   , broker_(nullptr)
   , port_(0)
   , user_(nullptr)
   , pass_(nullptr)
   , last_reconnect_attempt_(0)
   , topic_count_(0)
-  , should_resubscribe_(false)
 {
   instance = this;
   client_.setCallback(internal_callback);
@@ -32,6 +32,10 @@ void MQTTManager::loop() {
     connect_or_reconnect();
   }
   client_.loop();
+}
+
+void MQTTManager::set_timeout(uint32_t ms) {
+  wifi_client_.setTimeout(ms);
 }
 
 bool MQTTManager::publish(const String& topic, const String& payload, bool retained) {
@@ -72,6 +76,7 @@ void MQTTManager::connect_or_reconnect() {
   String cid = client_id_.length() > 0 ? client_id_ : ("esp32-" + String(random(0xffff), HEX));
   Serial.printf("MQTT connecting to %s:%d as %s ... ", broker_, port_, cid.c_str());
 
+  wifi_client_.setTimeout(3000);
   bool ok;
   if (strlen(user_) > 0) {
     ok = client_.connect(cid.c_str(), user_, pass_);
@@ -81,7 +86,7 @@ void MQTTManager::connect_or_reconnect() {
 
   if (ok) {
     Serial.println("connected");
-    should_resubscribe_ = true;
+    last_reconnect_attempt_ = 0;
     resubscribe();
     if (connect_callback_) {
       connect_callback_();

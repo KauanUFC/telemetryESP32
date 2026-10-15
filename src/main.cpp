@@ -1,13 +1,12 @@
 #include <Arduino.h>
 #include <WebServer.h>
+#include <esp_task_wdt.h>
 #include "AppConfig.h"
 #include "Secrets.h"
 #include "wifi_manager.h"
 #include "mqtt_manager.h"
 #include "telemetry.h"
 #include "ota_manager.h"
-
-static constexpr uint16_t HTTP_PORT = 80;
 
 WiFiManager wifi;
 WiFiClient wifi_client;
@@ -19,6 +18,7 @@ WebServer http_server(HTTP_PORT);
 bool led_state = false;
 uint32_t last_telemetry_ms = 0;
 uint32_t last_log_ms = 0;
+uint32_t last_wifi_reconnect_ms = 0;
 String device_topic_base;
 
 void write_led(bool on) {
@@ -79,10 +79,12 @@ void on_mqtt_message(const String& topic, const String& payload) {
       return;
     }
     const char* cmd = doc["led"];
-    if (strcmp(cmd, "on") == 0) {
-      write_led(true);
-    } else if (strcmp(cmd, "off") == 0) {
-      write_led(false);
+    if (cmd) {
+      if (strcmp(cmd, "on") == 0) {
+        write_led(true);
+      } else if (strcmp(cmd, "off") == 0) {
+        write_led(false);
+      }
     }
   }
 }
@@ -131,12 +133,18 @@ void setup() {
 }
 
 void loop() {
-  wifi.reconnect();
+  esp_task_wdt_reset();
+
+  uint32_t now = millis();
+  if (now - last_wifi_reconnect_ms >= 10000) {
+    last_wifi_reconnect_ms = now;
+    wifi.reconnect();
+  }
+
   mqtt.loop();
   ota.handle();
   http_server.handleClient();
 
-  uint32_t now = millis();
   if (now - last_telemetry_ms >= TELEMETRY_INTERVAL_MS) {
     last_telemetry_ms = now;
 
